@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: mes-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mes}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mes}
+      POSTGRES_DB: ${POSTGRES_DB:-mes}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-mes} -d ${POSTGRES_DB:-mes}']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  api:
+    build: ./backend
+    container_name: mes-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-mes}:${POSTGRES_PASSWORD:-mes}@db:5432/${POSTGRES_DB:-mes}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      AUTO_CREATE_TABLES: 'true'
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8000:8000'
+    # Seeds on first boot, then serves. The seed is a no-op once data exists.
+    command: sh -c "python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  web:
+    build: ./frontend
+    container_name: mes-web
+    depends_on:
+      - api
+    ports:
+      - '8080:80'
+
+volumes:
+  pgdata:

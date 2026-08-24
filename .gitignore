@@ -1,0 +1,50 @@
+# ---- Node / frontend --------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# ---- Python / backend -------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Environment and secrets ------------------------------------------------
+# .env.example is committed on purpose, everything else with real values is not.
+.env
+.env.*
+!.env.example
+
+# ---- Docker and data --------------------------------------------------------
+# Postgres lives in the named `pgdata` volume, but catch bind-mounted copies too.
+pgdata/
+*.sqlite3
+docker-compose.override.yml
+
+# ---- Editors and OS ---------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Claude Code ------------------------------------------------------------
+.claude/settings.local.json
