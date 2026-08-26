@@ -10,10 +10,14 @@ import {
 import { useMes } from '@/store/mes'
 import { Button, cx } from '@/components/ui'
 
+/* Ordered the way work moves: what is happening, what is planned, what is running. */
 const NAV = [
-  { to: '/', label: 'Job sheets', end: true },
+  { to: '/', label: 'Dashboard', end: true },
+  { to: '/job-sheets', label: 'Job sheets' },
   { to: '/confirmed', label: 'Approvals' },
   { to: '/wip', label: 'Work in progress' },
+  { to: '/quality', label: 'Quality' },
+  { to: '/master-data', label: 'Master data' },
 ]
 
 function ThemeToggle() {
@@ -50,8 +54,8 @@ function Flash() {
 
   if (!flash) return null
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex justify-center px-4">
-      <div className="pointer-events-auto flex max-w-[62ch] items-start gap-3 rounded-[6px] border border-line-strong bg-panel px-3 py-2 shadow-lg shadow-black/10">
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[70] flex justify-center px-4">
+      <div className="glass animate-pop-in pointer-events-auto flex max-w-[62ch] items-start gap-3 rounded-[6px] border border-line-strong bg-panel/80 px-3 py-2 shadow-lg shadow-black/10">
         <p className="text-[13px] text-text">{flash}</p>
         <button
           onClick={clearFlash}
@@ -70,14 +74,15 @@ export function Shell() {
 
   return (
     <div className="min-h-[100dvh] bg-surface">
-      <header className="sticky top-0 z-40 border-b border-line bg-panel/95 backdrop-blur">
+      <header className="glass sticky top-0 z-40 border-b border-line bg-panel/70">
         <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-6 px-4">
           <div className="flex items-center gap-2">
             <GearSixIcon size={18} weight="fill" className="text-accent" />
-            <span className="text-[14px] font-semibold tracking-tight">PrePPSE</span>
+            <span className="text-gradient text-[14px] font-semibold tracking-tight">PrePPSE</span>
           </div>
 
-          <nav className="flex items-center gap-1">
+          {/* Eight destinations: the row scrolls rather than wraps on a narrow screen. */}
+          <nav className="no-scrollbar flex items-center gap-1 overflow-x-auto">
             {NAV.map((item) => (
               <NavLink
                 key={item.to}
@@ -85,7 +90,7 @@ export function Shell() {
                 end={item.end}
                 className={({ isActive }) =>
                   cx(
-                    'rounded-[6px] px-2.5 py-1.5 text-[13px] transition-colors duration-150',
+                    'shrink-0 rounded-[6px] px-2.5 py-1.5 text-[13px] transition-colors duration-150',
                     isActive
                       ? 'bg-accent-soft font-medium text-accent'
                       : 'text-text-dim hover:bg-panel-2 hover:text-text',

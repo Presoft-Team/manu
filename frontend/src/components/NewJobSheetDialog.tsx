@@ -119,14 +119,14 @@ export function NewJobSheetDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[8vh]"
+      className="animate-scrim-in fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[8vh] backdrop-blur-[2px]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="New job sheet"
-        className="flex max-h-[84vh] w-full max-w-[720px] flex-col rounded-[6px] border border-line-strong bg-panel shadow-xl shadow-black/20"
+        className="animate-layer-in flex max-h-[84vh] w-full max-w-[720px] flex-col rounded-[6px] border border-line-strong bg-panel shadow-2xl shadow-black/25"
       >
         <header className="flex h-11 shrink-0 items-center justify-between border-b border-line px-3">
           <h2 className="text-[13px] font-semibold">New job sheet</h2>
@@ -167,10 +167,12 @@ export function NewJobSheetDialog({
                   if (file) void readFile(file)
                 }}
                 className={cx(
-                  'flex cursor-pointer flex-col items-center gap-2 rounded-[6px] border border-dashed px-4 py-10 text-center transition-colors duration-150',
+                  'mesh relative flex cursor-pointer flex-col items-center gap-2 overflow-hidden',
+                  'rounded-[6px] border border-dashed px-4 py-10 text-center',
+                  'transition-all duration-200 ease-spring',
                   dragging
-                    ? 'border-accent bg-accent-soft'
-                    : 'border-line-strong hover:border-accent hover:bg-panel-2',
+                    ? 'border-accent bg-accent-soft glow-accent'
+                    : 'border-line-strong hover:border-accent hover:glow-accent',
                 )}
               >
                 <input
@@ -205,7 +207,7 @@ export function NewJobSheetDialog({
                   loosely, so <span className="num">qty</span>, <span className="num">quantity</span>{' '}
                   and <span className="num">target_qty</span> all work.
                 </p>
-                <pre className="num mt-2 overflow-x-auto rounded-[4px] border border-line bg-panel p-2.5 text-[11px] leading-relaxed text-text-dim">
+                <pre className="num mt-2 overflow-x-auto rounded-[4px] border border-line bg-panel p-2.5 text-[12px] leading-relaxed text-text-dim">
                   {SAMPLE_CSV}
                 </pre>
                 <p className="mt-2 text-[12px] text-text-dim">
@@ -292,16 +294,16 @@ export function NewJobSheetDialog({
                   <table className="w-full">
                     <thead className="bg-panel-2/60">
                       <tr>
-                        <th className="w-[150px] px-2 py-1.5 text-left text-[11px] font-medium text-text-faint">
+                        <th className="w-[150px] px-2 py-1.5 text-left text-[12px] font-medium text-text-faint">
                           Item id
                         </th>
-                        <th className="px-2 py-1.5 text-left text-[11px] font-medium text-text-faint">
+                        <th className="px-2 py-1.5 text-left text-[12px] font-medium text-text-faint">
                           Item name
                         </th>
-                        <th className="w-[96px] px-2 py-1.5 text-right text-[11px] font-medium text-text-faint">
+                        <th className="w-[96px] px-2 py-1.5 text-right text-[12px] font-medium text-text-faint">
                           Qty
                         </th>
-                        <th className="w-[76px] px-2 py-1.5 text-left text-[11px] font-medium text-text-faint">
+                        <th className="w-[76px] px-2 py-1.5 text-left text-[12px] font-medium text-text-faint">
                           Unit
                         </th>
                         <th className="w-[40px]" />
@@ -374,7 +376,7 @@ export function NewJobSheetDialog({
 
         <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-3 py-2.5">
           {mode === 'manual' && validGoals.length > 0 && (
-            <span className="num mr-auto text-[11px] text-text-faint">
+            <span className="num mr-auto text-[12px] text-text-faint">
               {validGoals.length} item{validGoals.length > 1 ? 's' : ''} ready
             </span>
           )}

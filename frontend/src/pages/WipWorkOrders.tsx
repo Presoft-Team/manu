@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowRightIcon,
+  DeviceTabletIcon,
   FactoryIcon,
   PhoneCallIcon,
   TimerIcon,
@@ -8,6 +10,7 @@ import {
 } from '@phosphor-icons/react'
 import { useMes } from '@/store/mes'
 import {
+  Button,
   EmptyState,
   Metric,
   Panel,
@@ -19,7 +22,7 @@ import { fmtDateTime, fmtInt, fmtSpan, fmtTime } from '@/lib/format'
 import type { StaffRun, WorkOrder } from '@/types'
 
 const cell = 'px-2.5 py-2 text-[13px]'
-const head = 'px-2.5 py-1.5 text-left text-[11px] font-medium text-text-faint'
+const head = 'px-2.5 py-1.5 text-left text-[12px] font-medium text-text-faint'
 
 /** Work orders that have reached the floor. Draft and confirmed-but-unreleased are excluded. */
 const ON_FLOOR = new Set(['released', 'running', 'stopped', 'completed'])
@@ -40,6 +43,12 @@ export default function WipWorkOrders() {
   const { workOrderId } = useParams()
   const navigate = useNavigate()
   const mes = useMes()
+  /*
+    Floor mode: this screen also lives on a tablet next to a machine. Bigger type,
+    48px touch targets, and forced dark to cut glare in a dim or dusty bay. Opt-in
+    rather than automatic, because the same screen is read at a desk.
+  */
+  const [floorMode, setFloorMode] = useState(false)
 
   const floor = mes.workOrders.filter((w) => ON_FLOOR.has(w.status))
   const selected = floor.find((w) => w.id === workOrderId) ?? null
@@ -48,23 +57,51 @@ export default function WipWorkOrders() {
   const activeOperators = mes.staffRuns.filter((r) => r.status === 'running').length
 
   return (
-    <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-[20px] font-semibold tracking-tight">Work in progress</h1>
-        <p className="mt-0.5 text-[13px] text-text-dim">
-          Released work orders on the floor. Open one to see who ran it and what came off the machine.
-        </p>
+    <div
+      className={cx(
+        'flex flex-col gap-5 transition-all duration-300 ease-spring',
+        floorMode && 'floor dark -mx-4 rounded-[6px] bg-surface px-4 py-4',
+      )}
+    >
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-gradient text-[20px] font-semibold tracking-tight">
+            Work in progress
+          </h1>
+          <p className="mt-0.5 text-[13px] text-text-dim">
+            Released work orders on the floor. Open one to see who ran it and what came off the
+            machine.
+          </p>
+        </div>
+        <Button
+          variant={floorMode ? 'primary' : 'secondary'}
+          onClick={() => setFloorMode((f) => !f)}
+          aria-pressed={floorMode}
+          icon={<DeviceTabletIcon size={15} weight="bold" />}
+        >
+          {floorMode ? 'Floor mode on' : 'Floor mode'}
+        </Button>
       </div>
 
       <Panel className="overflow-hidden">
         <div className="grid grid-cols-2 divide-x divide-line md:grid-cols-4">
-          <Metric label="Orders on the floor" value={fmtInt(floor.length)} />
-          <Metric label="Operators clocked in" value={fmtInt(activeOperators)} />
-          <Metric label="Good units today" value={fmtInt(totals.done)} tone="text-st-done" />
+          <Metric label="Orders on the floor" value={fmtInt(floor.length)} dot="bg-st-confirmed" />
+          <Metric
+            label="Operators clocked in"
+            value={fmtInt(activeOperators)}
+            dot="bg-st-running"
+          />
+          <Metric
+            label="Good units today"
+            value={fmtInt(totals.done)}
+            tone="text-st-done"
+            dot="bg-st-done"
+          />
           <Metric
             label="Rosak units"
             value={fmtInt(totals.rosak)}
             tone={totals.rosak ? 'text-st-stopped' : undefined}
+            dot="bg-st-stopped"
             hint={`${fmtInt(totals.waste)} waste, ${fmtInt(totals.downtimeMin)} min downtime`}
           />
         </div>
@@ -134,12 +171,12 @@ function WorkOrderRow({
       >
         <div className="min-w-[160px]">
           <div className="num text-[13px] font-medium">{wo.code}</div>
-          <div className="num mt-0.5 text-[11px] text-text-faint">{sheet?.code}</div>
+          <div className="num mt-0.5 text-[12px] text-text-faint">{sheet?.code}</div>
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px]">{wo.route[0]?.operation ?? 'No route'}</div>
-          <div className="num mt-0.5 truncate text-[11px] text-text-faint">
+          <div className="num mt-0.5 truncate text-[12px] text-text-faint">
             {wo.slot?.machine ?? 'Machine not assigned'}
           </div>
         </div>
@@ -161,12 +198,12 @@ function WorkOrderRow({
           <div className={cx('num text-[13px]', t.rosak ? 'text-st-stopped' : 'text-text-dim')}>
             {fmtInt(t.rosak)}
           </div>
-          <div className="text-[11px] text-text-faint">rosak</div>
+          <div className="text-[12px] text-text-faint">rosak</div>
         </div>
 
         <div className="hidden w-[88px] text-right md:block">
           <div className="num text-[13px] text-text-dim">{runs.length}</div>
-          <div className="text-[11px] text-text-faint">operators</div>
+          <div className="text-[12px] text-text-faint">operators</div>
         </div>
 
         <div className="flex w-[140px] items-center justify-end gap-2">
@@ -261,19 +298,19 @@ function StaffWip({ wo }: { wo: WorkOrder }) {
                   <tr key={run.id} className="align-top hover:bg-panel-2">
                     <td className={cell}>
                       <div>{run.operatorName}</div>
-                      <div className="num mt-0.5 text-[11px] text-text-faint">{run.operatorId}</div>
+                      <div className="num mt-0.5 text-[12px] text-text-faint">{run.operatorId}</div>
                     </td>
                     <td className={cx(cell, 'num text-text-dim')}>{run.shift}</td>
                     <td className={cell}>
                       <div>{run.operation}</div>
-                      <div className="num mt-0.5 text-[11px] text-text-faint">{run.machine}</div>
+                      <div className="num mt-0.5 text-[12px] text-text-faint">{run.machine}</div>
                     </td>
                     <td className={cx(cell, 'num text-text-dim')}>
                       <div>
                         {fmtDateTime(run.startedAt)} to{' '}
                         {run.endedAt ? fmtTime(run.endedAt) : 'open'}
                       </div>
-                      <div className="mt-0.5 text-[11px] text-text-faint">
+                      <div className="mt-0.5 text-[12px] text-text-faint">
                         {fmtSpan(run.startedAt, run.endedAt)} elapsed
                       </div>
                     </td>
@@ -291,14 +328,14 @@ function StaffWip({ wo }: { wo: WorkOrder }) {
                     <td className={cx(cell, 'text-right')}>
                       <div className="num text-text-dim">{fmtInt(run.downtimeMin)} min</div>
                       {run.downtimeReason && (
-                        <div className="mt-0.5 text-[11px] text-text-faint">{run.downtimeReason}</div>
+                        <div className="mt-0.5 text-[12px] text-text-faint">{run.downtimeReason}</div>
                       )}
                     </td>
                     <td className={cell}>
                       <div className="flex flex-col items-start gap-1">
                         <RunBadge status={run.status} />
                         {run.supervisorCalled && (
-                          <span className="flex items-center gap-1 text-[11px] text-st-stopped">
+                          <span className="flex items-center gap-1 text-[12px] text-st-stopped">
                             <PhoneCallIcon size={11} weight="fill" />
                             supervisor called
                           </span>

@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRightIcon,
   CalendarCheckIcon,
-  FloppyDiskIcon,
   HandPointingIcon,
   LightbulbFilamentIcon,
   LockSimpleIcon,
@@ -14,11 +13,12 @@ import {
 } from '@phosphor-icons/react'
 import { BOM_LIBRARY, ROUTE_LIBRARY } from '@/data/seed'
 import { useMes } from '@/store/mes'
-import { Button, Metric, WorkOrderBadge, cx, inputClass } from '@/components/ui'
+import { Button, Metric, SavedIndicator, WorkOrderBadge, cx, inputClass } from '@/components/ui'
+import { MachineSchedule } from '@/components/MachineSchedule'
 import { fmtDateTime, fmtInt, fmtMoney, fmtQty } from '@/lib/format'
 import type { BomLine, JobSheet, WorkOrder } from '@/types'
 
-const head = 'px-2.5 py-1.5 text-left text-[11px] font-medium text-text-faint'
+const head = 'px-2.5 py-1.5 text-left text-[12px] font-medium text-text-faint'
 const cell = 'px-2.5 py-2 text-[13px]'
 
 /** On the floor: the tab goes read-only and offers the WIP screen instead. */
@@ -42,7 +42,25 @@ export function WorkOrderTab({
 
   /** The machine slot stays sealed until both a BOM and a route are chosen. */
   const planned = !!wo.bomTemplateId && !!wo.routeTemplateId
-  const [shortLine, setShortLine] = useState<BomLine | null>(null)
+  /*
+    The shortage editor is anchored to the row that opened it rather than being a
+    centred modal, so the planner's eye never leaves the offending material. It
+    is positioned `fixed` from the button's rect because the table scrolls
+    horizontally and would clip an absolutely positioned child.
+  */
+  const [shortLine, setShortLine] = useState<{ line: BomLine; top: number; left: number } | null>(
+    null,
+  )
+
+  const openShortage = (line: BomLine, el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    const width = 380
+    setShortLine({
+      line,
+      top: Math.min(r.bottom + 8, window.innerHeight - 340),
+      left: Math.max(12, Math.min(r.right - width, window.innerWidth - width - 12)),
+    })
+  }
 
   const bomCost = wo.bom.reduce((sum, l) => sum + l.requiredQty * l.unitCost, 0)
   const shortCount = wo.bom.filter((l) => l.requiredQty > l.onHandQty).length
@@ -56,7 +74,7 @@ export function WorkOrderTab({
           <WorkOrderBadge status={wo.status} />
           <span
             className={cx(
-              'inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 text-[11px] leading-none',
+              'inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 text-[12px] leading-none',
               wo.mode === 'ai'
                 ? 'border-accent/35 bg-accent-soft text-accent'
                 : 'border-line-strong text-text-dim',
@@ -71,7 +89,7 @@ export function WorkOrderTab({
           </span>
 
           {locked && (
-            <span className="ml-auto flex items-center gap-1.5 text-[11px] text-text-dim">
+            <span className="ml-auto flex items-center gap-1.5 text-[12px] text-text-dim">
               <LockSimpleIcon size={13} weight="fill" className="text-st-confirmed" />
               {mes.jobSheetLocked(sheet.id)
                 ? `Locked by ${sheet.code}`
@@ -84,10 +102,10 @@ export function WorkOrderTab({
         <div className="grid gap-4 border-b border-line p-4 lg:grid-cols-3">
           <div>
             <h3 className="text-[12px] font-semibold tracking-wide text-text-dim uppercase">Goal</h3>
-            <div className="num mt-2 text-[11px] text-text-faint">{goal?.productCode}</div>
+            <div className="num mt-2 text-[12px] text-text-faint">{goal?.productCode}</div>
             <div className="text-[13px]">{goal?.productName ?? 'Unassigned item'}</div>
             <label className="mt-2.5 flex items-center gap-2">
-              <span className="text-[11px] text-text-dim">Qty</span>
+              <span className="text-[12px] text-text-dim">Qty</span>
               <input
                 type="number"
                 min={1}
@@ -98,9 +116,9 @@ export function WorkOrderTab({
                 }
                 className={cx(inputClass, 'num w-28 py-1 text-right')}
               />
-              <span className="text-[11px] text-text-faint">{wo.unit}</span>
+              <span className="text-[12px] text-text-faint">{wo.unit}</span>
             </label>
-            <p className="mt-1 text-[11px] text-text-faint">
+            <p className="mt-1 text-[12px] text-text-faint">
               Drives BOM quantities and route run time.
             </p>
           </div>
@@ -147,7 +165,7 @@ export function WorkOrderTab({
               Material
             </h3>
             {shortCount > 0 && (
-              <span className="flex items-center gap-1.5 text-[11px] text-st-stopped">
+              <span className="flex items-center gap-1.5 text-[12px] text-st-stopped">
                 <WarningOctagonIcon size={13} weight="fill" />
                 {shortCount} line{shortCount > 1 ? 's' : ''} short on stock
               </span>
@@ -194,25 +212,27 @@ export function WorkOrderTab({
                         <td className={cx(cell, 'text-[12px]')}>{line.name}</td>
                         <td className={cx(cell, 'num text-right', short && 'text-st-stopped')}>
                           {fmtQty(line.requiredQty)}{' '}
-                          <span className="text-[11px] text-text-faint">{line.unit}</span>
+                          <span className="text-[12px] text-text-faint">{line.unit}</span>
                         </td>
                         <td className={cx(cell, 'num text-right text-text-dim')}>
                           {fmtQty(line.onHandQty)}{' '}
-                          <span className="text-[11px] text-text-faint">{line.unit}</span>
+                          <span className="text-[12px] text-text-faint">{line.unit}</span>
                         </td>
                         <td className={cx(cell, 'text-right')}>
                           {!short ? (
-                            <span className="text-[11px] text-st-confirmed">In stock</span>
+                            <span className="text-[12px] text-st-confirmed">In stock</span>
                           ) : raised ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-st-running">
+                            <span className="inline-flex items-center gap-1 text-[12px] text-st-running">
                               <ReceiptIcon size={12} weight="bold" />
                               PO raised
                             </span>
                           ) : (
                             <button
-                              onClick={() => setShortLine(line)}
+                              onClick={(e) => openShortage(line, e.currentTarget)}
                               disabled={locked}
-                              className="rounded-[4px] border border-st-stopped/40 px-1.5 py-0.5 text-[11px] font-medium text-st-stopped transition-colors duration-150 hover:bg-st-stopped/10 disabled:pointer-events-none disabled:opacity-50"
+                              aria-haspopup="dialog"
+                              aria-expanded={shortLine?.line.id === line.id}
+                              className="rounded-[4px] border border-st-stopped/40 px-1.5 py-0.5 text-[12px] font-medium text-st-stopped transition-all duration-200 ease-spring hover:bg-st-stopped/10 disabled:pointer-events-none disabled:opacity-50"
                             >
                               Not enough
                             </button>
@@ -239,7 +259,8 @@ export function WorkOrderTab({
                 disabled={!planned}
                 icon={<CalendarCheckIcon size={14} weight="bold" />}
               >
-                {wo.slot ? 'Reschedule' : 'Book slot'}
+                {/* Rescheduling is the drag. This button only ever asks the scheduler. */}
+                {wo.slot ? 'Find earliest window' : 'Book slot'}
               </Button>
             )}
           </div>
@@ -249,20 +270,47 @@ export function WorkOrderTab({
               <LockSimpleIcon size={14} weight="fill" className="shrink-0" />
               Available only after a BOM and a route are selected.
             </p>
-          ) : wo.slot ? (
-            <div className="mt-2 rounded-[6px] border border-line bg-panel-2/40 px-3 py-2.5">
-              <div className="num text-[13px] font-medium">{wo.slot.machine}</div>
-              <div className="num mt-0.5 text-[12px] text-text-dim">
-                {fmtDateTime(wo.slot.startsAt)} to {fmtDateTime(wo.slot.endsAt)}
-              </div>
-              <div className="mt-1 text-[11px] text-text-faint">
-                {wo.slot.autoScheduled ? 'Auto-scheduled, earliest free window' : 'Assigned by a planner'}
-              </div>
-            </div>
           ) : (
-            <p className="mt-2 text-[12px] text-text-dim">
-              No slot booked yet on {wo.route[0]?.machine}.
-            </p>
+            <>
+              {wo.slot ? (
+                <div className="mt-2 rounded-[6px] border border-line bg-panel-2/40 px-3 py-2.5">
+                  <div className="num text-[13px] font-medium">{wo.slot.machine}</div>
+                  <div className="num mt-0.5 text-[12px] text-text-dim">
+                    {fmtDateTime(wo.slot.startsAt)} to {fmtDateTime(wo.slot.endsAt)}
+                  </div>
+                  <div className="mt-1 text-[12px] text-text-faint">
+                    {wo.slot.autoScheduled
+                      ? 'Auto-scheduled, earliest free window'
+                      : 'Assigned by a planner'}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-[12px] text-text-dim">
+                  No slot booked yet on {wo.route[0]?.machine}. Book one to place this order on the
+                  strip below.
+                </p>
+              )}
+
+              {/*
+                The whole floor, not just this order: a slot is only sensible next
+                to what the other machines are already carrying.
+              */}
+              <div className="mt-3 rounded-[6px] border border-line bg-panel-2/30 px-3 py-3">
+                <MachineSchedule
+                  workOrders={mes.workOrders}
+                  highlight={wo.code}
+                  editable={locked ? undefined : wo.code}
+                  onMove={(machine, startsAt) => mes.moveSlot(wo.id, machine, startsAt)}
+                />
+                {!locked && wo.slot && (
+                  <p className="mt-2 text-[12px] text-text-faint">
+                    Drag this order's bar to reschedule it: sideways to move it in time, onto
+                    another row to move it to that machine. It snaps to the half hour, and a drop
+                    that would double-book a machine is refused.
+                  </p>
+                )}
+              </div>
+            </>
           )}
         </section>
 
@@ -314,28 +362,24 @@ export function WorkOrderTab({
             >
               Delete
             </Button>
-            <Button
-              className="min-w-[200px] justify-center"
-              onClick={() => mes.saveDraft(sheet.id)}
-              icon={<FloppyDiskIcon size={15} weight="bold" />}
-            >
-              Save
-            </Button>
+            {/* Nothing to save: every edit above is already written. */}
+            <SavedIndicator at={sheet.lastModifiedAt} />
           </>
         )}
       </footer>
 
       {shortLine && (
-        <ShortageDialog
+        <ShortagePopover
           wo={wo}
-          line={shortLine}
+          line={shortLine.line}
+          at={{ top: shortLine.top, left: shortLine.left }}
           onClose={() => setShortLine(null)}
           onRaisePo={() => {
-            mes.raisePurchaseRequest(wo.id, shortLine.id)
+            mes.raisePurchaseRequest(wo.id, shortLine.line.id)
             setShortLine(null)
           }}
           onEdit={(perUnit) => {
-            mes.patchBomLine(wo.id, shortLine.id, { requiredPerUnit: perUnit })
+            mes.patchBomLine(wo.id, shortLine.line.id, { requiredPerUnit: perUnit })
             setShortLine(null)
           }}
         />
@@ -392,35 +436,51 @@ function Selector({
           ))}
         </optgroup>
       </select>
-      <p className="mt-1.5 truncate text-[11px] text-text-faint" title={footnote}>
+      <p className="mt-1.5 truncate text-[12px] text-text-faint" title={footnote}>
         {footnote}
       </p>
     </div>
   )
 }
 
-/* ------------------------------------------------------- shortage popup --- */
+/* ---------------------------------------------------- shortage popover --- */
 
-/** "If not enough, pop up: edit or PO." Both exits from a short material line. */
-function ShortageDialog({
+/**
+ * "If not enough, pop up: edit or PO." Both exits from a short material line,
+ * anchored under the row's button so the planner stays on the offending material
+ * rather than being pulled into a centred dialog.
+ */
+function ShortagePopover({
   wo,
   line,
+  at,
   onClose,
   onEdit,
   onRaisePo,
 }: {
   wo: WorkOrder
   line: BomLine
+  at: { top: number; left: number }
   onClose: () => void
   onEdit: (requiredPerUnit: number) => void
   onRaisePo: () => void
 }) {
   const [perUnit, setPerUnit] = useState(line.requiredPerUnit)
+  const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) onClose()
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    // Deferred, so the click that opened this does not immediately close it.
+    const t = setTimeout(() => window.addEventListener('mousedown', onDown), 0)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mousedown', onDown)
+    }
   }, [onClose])
 
   const required = Number((perUnit * wo.qty).toFixed(2))
@@ -430,92 +490,84 @@ function ShortageDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[14vh]"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      ref={box}
+      role="dialog"
+      aria-label={`Not enough ${line.materialCode}`}
+      style={{ top: at.top, left: at.left }}
+      className="glass animate-pop-in fixed z-[65] w-[380px] rounded-[6px] border border-line-strong bg-panel/95 shadow-2xl shadow-black/25"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Not enough ${line.materialCode}`}
-        className="w-full max-w-[440px] rounded-[6px] border border-line-strong bg-panel shadow-xl shadow-black/20"
-      >
-        <header className="flex h-11 items-center justify-between border-b border-line px-3">
-          <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-st-stopped">
-            <WarningOctagonIcon size={15} weight="fill" />
-            Not enough {line.materialCode}
-          </h2>
-          <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
-            <XIcon size={14} weight="bold" />
-          </button>
-        </header>
+      <header className="flex h-10 items-center justify-between border-b border-line px-3">
+        <h2 className="flex items-center gap-1.5 text-[13px] font-semibold text-st-stopped">
+          <WarningOctagonIcon size={15} weight="fill" />
+          Not enough {line.materialCode}
+        </h2>
+        <button onClick={onClose} className="text-text-faint hover:text-text" aria-label="Close">
+          <XIcon size={14} weight="bold" />
+        </button>
+      </header>
 
-        <div className="flex flex-col gap-3 p-4">
-          <p className="text-[13px] text-text-dim">
-            {line.name} needs{' '}
-            <span className="num text-text">
-              {fmtQty(line.requiredQty)} {line.unit}
-            </span>{' '}
-            but only{' '}
-            <span className="num text-text">
-              {fmtQty(line.onHandQty)} {line.unit}
-            </span>{' '}
-            is on hand. Short by{' '}
-            <span className="num text-st-stopped">
-              {fmtQty(line.requiredQty - line.onHandQty)} {line.unit}
-            </span>
-            .
-          </p>
+      <div className="flex flex-col gap-3 p-3">
+        <p className="text-[13px] text-text-dim">
+          Needs{' '}
+          <span className="num text-text">
+            {fmtQty(line.requiredQty)} {line.unit}
+          </span>
+          , only{' '}
+          <span className="num text-text">
+            {fmtQty(line.onHandQty)} {line.unit}
+          </span>{' '}
+          on hand. Short by{' '}
+          <span className="num text-st-stopped">
+            {fmtQty(line.requiredQty - line.onHandQty)} {line.unit}
+          </span>
+          .
+        </p>
 
-          <div className="rounded-[6px] border border-line p-3">
-            <h3 className="text-[12px] font-medium">Edit the quantity</h3>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.001"
-                min={0}
-                value={perUnit}
-                onChange={(e) => setPerUnit(Number(e.target.value) || 0)}
-                className={cx(inputClass, 'num w-28 py-1 text-right')}
-                aria-label="Required per unit"
-              />
-              <span className="text-[11px] text-text-dim">
-                per unit ={' '}
-                <span className={cx('num', stillShort && 'text-st-stopped')}>
-                  {fmtQty(required)} {line.unit}
-                </span>
+        <div>
+          <h3 className="text-[12px] font-medium">Edit the quantity</h3>
+          <div className="mt-1.5 flex items-center gap-2">
+            <input
+              type="number"
+              step="0.001"
+              min={0}
+              value={perUnit}
+              onChange={(e) => setPerUnit(Number(e.target.value) || 0)}
+              className={cx(inputClass, 'num w-24 py-1 text-right')}
+              aria-label="Required per unit"
+            />
+            <span className="text-[12px] text-text-dim">
+              per unit ={' '}
+              <span className={cx('num', stillShort && 'text-st-stopped')}>
+                {fmtQty(required)} {line.unit}
               </span>
-            </div>
-            <button
-              onClick={() => setPerUnit(fits)}
-              className="mt-1.5 text-[11px] text-accent hover:underline"
-            >
-              Use {fmtQty(fits)} per unit, the most stock covers
-            </button>
+            </span>
           </div>
-
-          <div className="rounded-[6px] border border-line p-3">
-            <h3 className="text-[12px] font-medium">Or raise a purchase order</h3>
-            <p className="mt-1 text-[11px] text-text-dim">
-              Raises a purchase request for the shortfall and alerts the project manager. The work
-              order stays in draft until the stock lands.
-            </p>
-          </div>
+          <button
+            onClick={() => setPerUnit(fits)}
+            className="mt-1.5 text-[12px] text-accent hover:underline"
+          >
+            Use {fmtQty(fits)} per unit, the most stock covers
+          </button>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-line px-3 py-2.5">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button onClick={onRaisePo} icon={<ReceiptIcon size={14} weight="bold" />}>
-            Raise PO
-          </Button>
-          <Button
-            variant="primary"
-            disabled={perUnit === line.requiredPerUnit}
-            onClick={() => onEdit(perUnit)}
-          >
-            Save quantity
-          </Button>
-        </footer>
+        <p className="border-t border-line pt-2.5 text-[12px] text-text-dim">
+          Or raise a purchase request for the shortfall. The project manager is alerted and the work
+          order stays in draft until stock lands.
+        </p>
       </div>
+
+      <footer className="flex justify-end gap-2 border-t border-line px-3 py-2.5">
+        <Button onClick={onRaisePo} icon={<ReceiptIcon size={14} weight="bold" />}>
+          Raise PO
+        </Button>
+        <Button
+          variant="primary"
+          disabled={perUnit === line.requiredPerUnit}
+          onClick={() => onEdit(perUnit)}
+        >
+          Save quantity
+        </Button>
+      </footer>
     </div>
   )
 }

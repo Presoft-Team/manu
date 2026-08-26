@@ -84,6 +84,23 @@ export interface PurchaseRequest {
   managerAlerted: boolean
 }
 
+/**
+ * QC verdict on what came off the machine (flowchart step 8). `rework` spawns a
+ * child job sheet for the defective units; `scrapped` writes them off instead.
+ */
+export type QcDecision = 'accepted' | 'rework' | 'scrapped'
+
+export interface QcRecord {
+  decision: QcDecision
+  inspectedBy: string
+  inspectedAt: string
+  note: string
+  /** Units the verdict covers: good on accept, rosak on rework or scrap. */
+  qty: number
+  /** Set when the rework branch created a child job sheet. */
+  reworkJobSheetCode?: string
+}
+
 export interface WorkOrder {
   id: string
   code: string
@@ -107,6 +124,8 @@ export interface WorkOrder {
   createdAt: string
   confirmedAt: string | null
   notes: string
+  /** Absent until quality control signs the order off. */
+  qc?: QcRecord
 }
 
 /** A quantity target on the job sheet. Work orders draw down against it. */

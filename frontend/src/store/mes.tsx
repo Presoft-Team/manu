@@ -7,21 +7,18 @@ import {
   type ReactNode,
 } from 'react'
 import { BOM_LIBRARY, MATERIAL_MASTER, ROUTE_LIBRARY, SEED } from '@/data/seed'
+import { LABOUR_RATE_PER_HOUR, OVERHEAD_RATE, SCRAP_ALLOWANCE_PCT } from '@/lib/rates'
 import type {
   BomLine,
   BuildMode,
   DemandSource,
   JobSheet,
   JobSheetGoal,
+  QcDecision,
   RouteStep,
   StaffRun,
   WorkOrder,
 } from '@/types'
-
-/* Costing constants. Hardcoded here; these become a rates table in the backend. */
-const LABOUR_RATE_PER_HOUR = 118
-const OVERHEAD_RATE = 0.6
-const SCRAP_ALLOWANCE_PCT = 0.02
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 const uid = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 9)}`
@@ -199,9 +196,24 @@ interface MesApi extends MesState {
   raisePurchaseRequest: (workOrderId: string, lineId: string) => void
   buildSummary: (workOrderId: string) => void
   autoSchedule: (workOrderId: string) => void
+  /**
+   * Drop a booked slot somewhere else on the schedule strip. Duration is carried
+   * over; the planner is choosing a window and a machine, not a run length.
+   */
+  moveSlot: (workOrderId: string, machine: string, startsAt: string) => void
   confirmWorkOrder: (workOrderId: string) => void
 
-  saveDraft: (jobSheetId: string) => void
+  /**
+   * QC verdict on a finished work order (flowchart step 8). `rework` spawns a
+   * child job sheet for the defective units; the other two close the order out.
+   */
+  recordQc: (workOrderId: string, decision: QcDecision, note: string) => void
+
+  /*
+   * There is no save action. Every mutation above writes through and stamps the
+   * sheet's `lastModifiedAt`, so the UI reports saved state rather than asking
+   * for it.
+   */
   confirmJobSheet: (jobSheetId: string) => void
   approveJobSheet: (jobSheetId: string) => void
   rejectJobSheet: (jobSheetId: string, reason: string) => void
@@ -729,6 +741,63 @@ export function MesProvider({ children }: { children: ReactNode }) {
     [mutateWo, say],
   )
 
+  const moveSlot = useCallback<MesApi['moveSlot']>(
+    (workOrderId, machine, startsAt) => {
+      const wo = state.workOrders.find((w) => w.id === workOrderId)
+      if (!wo?.slot) return
+      if (wo.status !== 'draft') {
+        say(`${wo.code} is confirmed. Its slot can no longer be moved.`)
+        return
+      }
+
+      const from = new Date(startsAt).getTime()
+      const to = from + (new Date(wo.slot.endsAt).getTime() - new Date(wo.slot.startsAt).getTime())
+
+      const midnight = new Date()
+      midnight.setHours(0, 0, 0, 0)
+      if (from < midnight.getTime()) {
+        say('A slot cannot be booked into the past.')
+        return
+      }
+
+      /* One machine, one order at a time. An overlap here is a double booking. */
+      const clash = state.workOrders.find(
+        (w) =>
+          w.id !== workOrderId &&
+          w.status !== 'completed' &&
+          w.slot?.machine === machine &&
+          from < new Date(w.slot.endsAt).getTime() &&
+          to > new Date(w.slot.startsAt).getTime(),
+      )
+      if (clash) {
+        say(
+          `${machine.split(' / ')[0]} is already booked by ${clash.code} in that window. Drop it somewhere clear.`,
+        )
+        return
+      }
+
+      mutateWo(workOrderId, (w) => {
+        w.slot = {
+          machine,
+          startsAt: new Date(from).toISOString(),
+          endsAt: new Date(to).toISOString(),
+          // Moved by hand, so it is no longer the scheduler's choice.
+          autoScheduled: false,
+        }
+      })
+      say(
+        `${wo.code} moved to ${machine.split(' / ')[0]}, ${new Date(from).toLocaleString('en-MY', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })}.`,
+      )
+    },
+    [state.workOrders, mutateWo, say],
+  )
+
   const confirmWorkOrder = useCallback<MesApi['confirmWorkOrder']>(
     (workOrderId) => {
       const wo = state.workOrders.find((w) => w.id === workOrderId)
@@ -758,13 +827,100 @@ export function MesProvider({ children }: { children: ReactNode }) {
     [state.workOrders, mutateWo, say],
   )
 
-  const saveDraft = useCallback<MesApi['saveDraft']>(
-    (jobSheetId) => {
-      const sheet = state.jobSheets.find((s) => s.id === jobSheetId)
-      setState((prev) => ({ ...prev, jobSheets: touch(prev.jobSheets, jobSheetId) }))
-      say(`Draft saved${sheet ? ` for ${sheet.code}` : ''} at ${new Date().toLocaleTimeString()}.`)
+  const recordQc = useCallback<MesApi['recordQc']>(
+    (workOrderId, decision, note) => {
+      const wo = state.workOrders.find((w) => w.id === workOrderId)
+      if (!wo) return
+      if (wo.qc) {
+        say(`${wo.code} has already been inspected. A verdict cannot be overwritten.`)
+        return
+      }
+
+      const runs = state.staffRuns.filter((r) => r.workOrderId === workOrderId)
+      if (runs.length === 0) {
+        say(`No production recorded on ${wo.code}. There is nothing to inspect yet.`)
+        return
+      }
+
+      const good = runs.reduce((sum, r) => sum + r.qtyDone, 0)
+      const rosak = runs.reduce((sum, r) => sum + r.qtyRosak, 0)
+      const qty = decision === 'accepted' ? good : rosak
+
+      if (decision !== 'accepted' && rosak === 0) {
+        say(`${wo.code} has no defective units. Accept it instead.`)
+        return
+      }
+
+      /*
+       * The rework sheet is built out here rather than inside the updater:
+       * StrictMode runs updaters twice, which would create the sheet twice.
+       */
+      let reworkSheet: JobSheet | null = null
+      if (decision === 'rework') {
+        const parent = state.jobSheets.find((s) => s.id === wo.jobSheetId)
+        const goal = parent?.goals.find((g) => g.id === wo.goalId)
+        jsSequence += 1
+        const now = new Date().toISOString()
+        const due = new Date()
+        due.setDate(due.getDate() + 7)
+        reworkSheet = {
+          id: uid('js'),
+          code: `JS-2608-0${jsSequence}`,
+          source: 'rework',
+          reference: `RW-${wo.code.split('-').pop()}`,
+          customer: parent?.customer ?? 'Internal rework',
+          createdBy: 'Quality control',
+          createdAt: now,
+          lastModifiedAt: now,
+          dueDate: due.toISOString().slice(0, 10),
+          status: 'draft',
+          goals: [
+            {
+              id: uid('g'),
+              productCode: goal?.productCode ?? 'FG-UNKNOWN',
+              productName: goal?.productName ?? 'Rework units',
+              targetQty: rosak,
+              unit: wo.unit,
+            },
+          ],
+          workOrderIds: [],
+          approvedBy: null,
+          rejectionReason: null,
+          parentWorkOrderCode: wo.code,
+        }
+      }
+
+      const record = {
+        decision,
+        inspectedBy: 'Quality control',
+        inspectedAt: new Date().toISOString(),
+        note,
+        qty,
+        ...(reworkSheet ? { reworkJobSheetCode: reworkSheet.code } : {}),
+      }
+
+      setState((prev) => ({
+        ...prev,
+        jobSheets: touch(
+          reworkSheet ? [reworkSheet, ...prev.jobSheets] : prev.jobSheets,
+          wo.jobSheetId,
+        ),
+        workOrders: prev.workOrders.map((w) =>
+          w.id === workOrderId ? { ...w, qc: record, status: 'completed' } : w,
+        ),
+      }))
+
+      if (decision === 'accepted') {
+        say(`${wo.code} accepted by QC. ${good} good unit${good === 1 ? '' : 's'} released to stock.`)
+      } else if (decision === 'rework') {
+        say(
+          `${rosak} unit${rosak === 1 ? '' : 's'} sent for rework. ${reworkSheet!.code} raised as a draft against ${wo.code}.`,
+        )
+      } else {
+        say(`${rosak} unit${rosak === 1 ? '' : 's'} written off as scrap. Cost stays on ${wo.code}.`)
+      }
     },
-    [state.jobSheets, say],
+    [state.workOrders, state.staffRuns, state.jobSheets, say],
   )
 
   const confirmJobSheet = useCallback<MesApi['confirmJobSheet']>(
@@ -910,8 +1066,9 @@ export function MesProvider({ children }: { children: ReactNode }) {
       raisePurchaseRequest,
       buildSummary,
       autoSchedule,
+      moveSlot,
       confirmWorkOrder,
-      saveDraft,
+      recordQc,
       confirmJobSheet,
       approveJobSheet,
       rejectJobSheet,
@@ -923,7 +1080,7 @@ export function MesProvider({ children }: { children: ReactNode }) {
       applyRouteTemplate, aiPlanJobSheet, addBomLine, patchBomLine,
       removeBomLine, addRouteStep, patchRouteStep, removeRouteStep, checkFeasibility,
       raisePurchaseRequest, buildSummary,
-      autoSchedule, confirmWorkOrder, saveDraft, confirmJobSheet, approveJobSheet, rejectJobSheet,
+      autoSchedule, moveSlot, confirmWorkOrder, recordQc, confirmJobSheet, approveJobSheet, rejectJobSheet,
       resetDemo,
     ],
   )

@@ -55,5 +55,14 @@ docker-compose.override.yml
 Thumbs.db
 desktop.ini
 
+# ---- Test output ------------------------------------------------------------
+coverage/
+.nyc_output/
+
 # ---- Claude Code ------------------------------------------------------------
+# Per-machine settings and session state. The skills under .claude/skills are
+# committed on purpose so everyone gets the same ones.
 .claude/settings.local.json
+.claude/*.local.json
+.claude/todos/
+.claude/shell-snapshots/

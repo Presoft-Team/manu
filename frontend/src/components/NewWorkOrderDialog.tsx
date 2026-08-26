@@ -48,14 +48,14 @@ export function NewWorkOrderDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[12vh]"
+      className="animate-scrim-in fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[12vh] backdrop-blur-[2px]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Add work order"
-        className="w-full max-w-[520px] rounded-[6px] border border-line-strong bg-panel shadow-xl shadow-black/20"
+        className="animate-layer-in w-full max-w-[520px] rounded-[6px] border border-line-strong bg-panel shadow-2xl shadow-black/25"
       >
         <header className="flex h-11 items-center justify-between border-b border-line px-3">
           <h2 className="text-[13px] font-semibold">Add work order</h2>

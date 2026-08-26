@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useMatch, useNavigate } from 'react-router-dom'
 import {
   ArrowRightIcon,
   ArrowsDownUpIcon,
@@ -15,8 +15,8 @@ import {
 } from '@phosphor-icons/react'
 import { useMes } from '@/store/mes'
 import { NewJobSheetDialog } from '@/components/NewJobSheetDialog'
-import { Button, EmptyState, JobSheetBadge, Panel, cx, inputClass } from '@/components/ui'
-import { daysUntil, fmtDate, fmtDateTime, fmtInt } from '@/lib/format'
+import { Button, EmptyState, JobSheetBadge, Metric, Panel, cx, inputClass } from '@/components/ui'
+import { fmtDate, fmtDateTime, fmtInt } from '@/lib/format'
 import type { DemandSource, JobSheet, JobSheetStatus, WorkOrder } from '@/types'
 
 const SOURCE_LABEL: Record<DemandSource, string> = {
@@ -78,6 +78,8 @@ const PAGE_SIZES = [10, 25, 50]
 export default function JobSheets() {
   const navigate = useNavigate()
   const { jobSheets, workOrdersFor } = useMes()
+  /* When the sheet layer is open, this list recedes rather than disappearing. */
+  const layerOpen = !!useMatch('/job-sheets/:id')
 
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<'all' | JobSheetStatus>('all')
@@ -113,26 +115,28 @@ export default function JobSheets() {
   const current = Math.min(page, pageCount - 1)
   const visible = rows.slice(current * pageSize, current * pageSize + pageSize)
 
-  /* Cards up top: what a planner opens first. Unfinished sheets, soonest due. */
-  const spotlight = useMemo(
-    () =>
-      [...jobSheets]
-        .filter((s) => s.status !== 'completed')
-        .sort((a, b) => daysUntil(a.dueDate) - daysUntil(b.dueDate))
-        .slice(0, 8),
-    [jobSheets],
-  )
-
   const reset = (fn: () => void) => {
     fn()
     setPage(0)
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <>
+      {/*
+        Scaled and dimmed while the layer is open: the planner has not lost their
+        place, but this is no longer the focus. Nothing `fixed` may live inside
+        this element, since a transform would become its containing block.
+      */}
+      <div
+        className={cx(
+          'flex flex-col gap-5 transition-all duration-300 ease-spring',
+          layerOpen && 'scale-[0.985] opacity-45',
+        )}
+        style={{ transformOrigin: '50% 0' }}
+      >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[20px] font-semibold tracking-tight">Job sheets</h1>
+          <h1 className="text-gradient text-[20px] font-semibold tracking-tight">Job sheets</h1>
           <p className="mt-0.5 text-[13px] text-text-dim">
             Every sheet in the plant, draft through completion. Open a sheet to build it, or jump
             straight to a work order already running on the floor.
@@ -161,7 +165,7 @@ export default function JobSheets() {
         </div>
       </div>
 
-      <SpotlightRail sheets={spotlight} onOpen={(id) => navigate(`/job-sheets/${id}`)} />
+      <StatusStrip sheets={jobSheets} />
 
       {/* ------------------------------------------------------ filter & sort --- */}
       <div className="flex flex-wrap items-center gap-2">
@@ -224,7 +228,7 @@ export default function JobSheets() {
 
       {/* -------------------------------------------------------------- table --- */}
       <Panel className="overflow-hidden">
-        <div className="hidden items-center gap-4 border-b border-line bg-panel-2/60 px-3 py-2 text-[11px] font-medium tracking-wide text-text-faint uppercase md:flex">
+        <div className="hidden items-center gap-4 border-b border-line bg-panel-2/60 px-3 py-2 text-[12px] font-medium tracking-wide text-text-faint uppercase md:flex">
           <span className="w-5" />
           <span className="min-w-[168px]">Order ID</span>
           <span className="min-w-0 flex-1">Client</span>
@@ -297,6 +301,8 @@ export default function JobSheets() {
         </div>
       </Panel>
 
+      </div>
+
       {newSheet && (
         <NewJobSheetDialog
           initialMode={newSheet}
@@ -305,84 +311,43 @@ export default function JobSheets() {
         />
       )}
 
-      {/* The job sheet layer renders here, over this list. */}
+      {/* The job sheet layer renders here, over this list and outside the transform. */}
       <Outlet />
-    </div>
+    </>
   )
 }
 
-/* ------------------------------------------------------------ spotlight --- */
+/* -------------------------------------------------------------- overview --- */
 
-function SpotlightRail({ sheets, onOpen }: { sheets: JobSheet[]; onOpen: (id: string) => void }) {
-  const { workOrdersFor } = useMes()
-  if (sheets.length === 0) return null
+/* The four states a planner acts on, left to right in the order work moves. */
+const STRIP: Array<{ status: JobSheetStatus; label: string; dot: string; tone?: string }> = [
+  { status: 'pending_approval', label: 'Pending approval', dot: 'bg-st-hold' },
+  { status: 'approved', label: 'Approved', dot: 'bg-st-confirmed' },
+  { status: 'in_progress', label: 'In progress', dot: 'bg-st-running', tone: 'text-st-running' },
+  { status: 'completed', label: 'Completed', dot: 'bg-st-done' },
+]
+
+function StatusStrip({ sheets }: { sheets: JobSheet[] }) {
+  const counts = useMemo(() => {
+    const tally = {} as Record<JobSheetStatus, number>
+    for (const s of sheets) tally[s.status] = (tally[s.status] ?? 0) + 1
+    return tally
+  }, [sheets])
 
   return (
-    <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
-      {sheets.map((sheet) => {
-        const orders = workOrdersFor(sheet.id)
-        const done = orders.filter((w) => w.status !== 'draft').length
-        const pct = orders.length ? Math.round((done / orders.length) * 100) : 0
-        const days = daysUntil(sheet.dueDate)
-        const targetQty = sheet.goals.reduce((sum, g) => sum + g.targetQty, 0)
-        const aiBuilt = orders.some((w) => w.mode === 'ai')
-        const shortage = orders.some((w) => w.feasibility === 'shortage')
-
-        return (
-          <button
-            key={sheet.id}
-            onClick={() => onOpen(sheet.id)}
-            className="group w-[248px] shrink-0 snap-start rounded-[6px] border border-line bg-panel p-3 text-left transition-colors duration-150 hover:border-accent/60 hover:bg-accent-soft/35"
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="num text-[13px] font-medium">{sheet.code}</span>
-              {aiBuilt && (
-                <LightbulbFilamentIcon
-                  size={13}
-                  weight="fill"
-                  className="text-accent"
-                  aria-label="AI-assigned"
-                />
-              )}
-              {shortage && (
-                <WarningOctagonIcon
-                  size={13}
-                  weight="fill"
-                  className="text-st-stopped"
-                  aria-label="Material shortage"
-                />
-              )}
-              <ArrowRightIcon
-                size={13}
-                weight="bold"
-                className="ml-auto text-text-faint transition-transform duration-150 group-hover:translate-x-0.5 group-hover:text-accent"
-              />
-            </div>
-
-            <div className="mt-1 truncate text-[13px]">{sheet.customer}</div>
-            <div className="mt-0.5 truncate text-[11px] text-text-faint">
-              {sheet.goals.map((g) => g.productName).join(' / ')}
-            </div>
-
-            <div className="mt-2.5 h-1 overflow-hidden rounded-full bg-panel-2">
-              <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="mt-1.5 flex items-center justify-between text-[11px] text-text-faint">
-              <span className="num">
-                {done}/{orders.length} WO · {fmtInt(targetQty)} pcs
-              </span>
-              <span className={cx('num', days < 7 ? 'text-st-stopped' : 'text-text-dim')}>
-                {days < 0 ? `${Math.abs(days)}d over` : `in ${days}d`}
-              </span>
-            </div>
-
-            <div className="mt-2">
-              <JobSheetBadge status={sheet.status} />
-            </div>
-          </button>
-        )
-      })}
-    </div>
+    <Panel className="overflow-hidden">
+      <div className="grid grid-cols-2 divide-x divide-y divide-line md:grid-cols-4 md:divide-y-0">
+        {STRIP.map((s) => (
+          <Metric
+            key={s.status}
+            label={s.label}
+            value={fmtInt(counts[s.status] ?? 0)}
+            dot={s.dot}
+            tone={s.tone}
+          />
+        ))}
+      </div>
+    </Panel>
   )
 }
 
@@ -428,26 +393,26 @@ function SheetRow({
 
         <button onClick={onOpenSheet} className="min-w-[168px] shrink-0 text-left">
           <span className="num text-[13px] font-medium hover:text-accent">{sheet.code}</span>
-          <span className="mt-0.5 block text-[11px] text-text-faint">
+          <span className="mt-0.5 block text-[12px] text-text-faint">
             {SOURCE_LABEL[sheet.source]} <span className="num">{sheet.reference}</span>
           </span>
         </button>
 
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px]">{sheet.customer}</div>
-          <div className="mt-0.5 truncate text-[11px] text-text-faint">
+          <div className="mt-0.5 truncate text-[12px] text-text-faint">
             {sheet.goals.map((g) => g.productName).join(' / ')}
           </div>
         </div>
 
         <div className="hidden w-[120px] text-right md:block">
           <div className="num text-[12px]">{fmtDate(sheet.createdAt)}</div>
-          <div className="text-[11px] text-text-faint">{sheet.createdBy}</div>
+          <div className="text-[12px] text-text-faint">{sheet.createdBy}</div>
         </div>
 
         <div className="hidden w-[132px] text-right md:block">
           <div className="num text-[12px]">{fmtDateTime(sheet.lastModifiedAt)}</div>
-          <div className="text-[11px] text-text-faint">last modified</div>
+          <div className="text-[12px] text-text-faint">last modified</div>
         </div>
 
         <div className="flex w-[150px] items-center justify-end gap-2">
@@ -504,7 +469,7 @@ function WorkOrderList({
 
                 <span className="min-w-0 flex-1 truncate text-[12px]">
                   {goal?.productName ?? 'Unassigned item'}
-                  <span className="num ml-2 text-[11px] text-text-faint">
+                  <span className="num ml-2 text-[12px] text-text-faint">
                     {fmtInt(wo.qty)} {wo.unit}
                   </span>
                 </span>
@@ -520,14 +485,14 @@ function WorkOrderList({
 
                 <span
                   className={cx(
-                    'inline-flex shrink-0 items-center rounded-[4px] border px-1.5 py-0.5 text-[11px] leading-none font-medium',
+                    'inline-flex shrink-0 items-center rounded-[4px] border px-1.5 py-0.5 text-[12px] leading-none font-medium',
                     view.tone,
                   )}
                 >
                   {view.label}
                 </span>
 
-                <span className="w-[92px] shrink-0 text-right text-[11px] text-text-faint">
+                <span className="w-[92px] shrink-0 text-right text-[12px] text-text-faint">
                   {view.wip ? (
                     <span className="inline-flex items-center gap-1 text-accent">
                       Open WIP

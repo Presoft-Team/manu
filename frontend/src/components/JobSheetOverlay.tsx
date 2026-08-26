@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type WheelEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   CalendarBlankIcon,
   CheckCircleIcon,
-  FloppyDiskIcon,
   LightbulbFilamentIcon,
   LockSimpleIcon,
   PlusIcon,
@@ -12,7 +11,7 @@ import {
 import { useMes } from '@/store/mes'
 import { NewWorkOrderDialog } from '@/components/NewWorkOrderDialog'
 import { WorkOrderTab } from '@/components/WorkOrderTab'
-import { Button, JobSheetBadge, cx } from '@/components/ui'
+import { Button, JobSheetBadge, SavedIndicator, cx } from '@/components/ui'
 import { fmtDate, fmtInt } from '@/lib/format'
 import type { WorkOrder } from '@/types'
 
@@ -35,7 +34,17 @@ export function JobSheetOverlay() {
   const [tab, setTab] = useState<string>(() => params.get('wo') ?? 'sheet')
   const [adding, setAdding] = useState(false)
 
-  const close = () => navigate('/')
+  /* Vertical wheel scrolls the tab strip sideways, so a full sheet is reachable. */
+  const strip = useRef<HTMLDivElement>(null)
+  const onStripWheel = (e: WheelEvent<HTMLDivElement>) => {
+    const el = strip.current
+    if (!el || el.scrollWidth <= el.clientWidth) return
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+    el.scrollLeft += e.deltaY
+  }
+
+  /* Closing drops back to the list this layer sits over, not to the dashboard. */
+  const close = () => navigate('/job-sheets')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -69,7 +78,7 @@ export function JobSheetOverlay() {
     <div className="fixed inset-0 z-50 flex justify-center px-3 py-6 sm:px-6 sm:py-8">
       {/* The list stays legible behind this: 80% scrim, not a blackout. */}
       <div
-        className="absolute inset-0 bg-surface/80 backdrop-blur-[2px]"
+        className="animate-scrim-in absolute inset-0 bg-surface/80 backdrop-blur-[3px]"
         onMouseDown={close}
         aria-hidden
       />
@@ -78,10 +87,17 @@ export function JobSheetOverlay() {
         role="dialog"
         aria-modal="true"
         aria-label={`Job sheet ${sheet.code}`}
-        className="relative flex w-full max-w-[1180px] flex-col"
+        className="animate-layer-in relative flex w-full max-w-[1180px] flex-col"
       >
         {/* ------------------------------------------------------- tab strip --- */}
-        <div className="flex shrink-0 items-end gap-1 overflow-x-auto pb-0">
+        {/* Only the tabs scroll. The close button sits outside, so the edge mask
+            never fades it out. */}
+        <div className="flex shrink-0 items-end gap-1">
+        <div
+          ref={strip}
+          onWheel={onStripWheel}
+          className="no-scrollbar edge-fade flex min-w-0 flex-1 snap-x items-end gap-1 overflow-x-auto pb-0"
+        >
           <Tab
             label="JobSheet"
             code={sheet.code}
@@ -112,11 +128,12 @@ export function JobSheetOverlay() {
               <PlusIcon size={14} weight="bold" />
             </button>
           )}
+        </div>
 
           <button
             onClick={close}
             aria-label="Close job sheet"
-            className="mb-1 ml-auto shrink-0 rounded-[6px] border border-line-strong bg-panel/70 p-1.5 text-text-dim transition-colors duration-150 hover:border-st-stopped hover:text-st-stopped"
+            className="glass mb-1 shrink-0 rounded-[6px] border border-line-strong bg-panel/70 p-1.5 text-text-dim transition-all duration-200 ease-spring hover:border-st-stopped hover:text-st-stopped"
           >
             <XIcon size={14} weight="bold" />
           </button>
@@ -180,14 +197,15 @@ function Tab({
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cx(
-        'flex shrink-0 items-center gap-1.5 rounded-t-[8px] border border-b-0 px-3 py-2 transition-colors duration-150',
+        'flex shrink-0 snap-start items-center gap-1.5 rounded-t-[8px] border border-b-0 px-3 py-2',
+        'transition-all duration-200 ease-spring',
         active
           ? 'z-10 -mb-px border-line-strong bg-panel pb-[9px] text-text'
           : INACTIVE_TONE[tone],
       )}
     >
       {ai && <LightbulbFilamentIcon size={12} weight="fill" className="text-accent" aria-hidden />}
-      <span className="text-[11px] opacity-70">{label}</span>
+      <span className="text-[12px] opacity-70">{label}</span>
       <span className="num text-[12px] font-medium">{code}</span>
     </button>
   )
@@ -234,13 +252,13 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
               <table className="w-full">
                 <thead className="bg-panel-2/60">
                   <tr>
-                    <th className="px-2.5 py-1.5 text-left text-[11px] font-medium text-text-faint">
+                    <th className="px-2.5 py-1.5 text-left text-[12px] font-medium text-text-faint">
                       Item name
                     </th>
-                    <th className="w-[104px] px-2.5 py-1.5 text-right text-[11px] font-medium text-text-faint">
+                    <th className="w-[104px] px-2.5 py-1.5 text-right text-[12px] font-medium text-text-faint">
                       Qty
                     </th>
-                    <th className="w-[120px] px-2.5 py-1.5 text-right text-[11px] font-medium text-text-faint">
+                    <th className="w-[120px] px-2.5 py-1.5 text-right text-[12px] font-medium text-text-faint">
                       Still need
                     </th>
                   </tr>
@@ -251,12 +269,12 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
                     return (
                       <tr key={goal.id} className="hover:bg-panel-2/60">
                         <td className="px-2.5 py-2">
-                          <div className="num text-[11px] text-text-faint">{goal.productCode}</div>
+                          <div className="num text-[12px] text-text-faint">{goal.productCode}</div>
                           <div className="text-[13px]">{goal.productName}</div>
                         </td>
                         <td className="num px-2.5 py-2 text-right text-[13px]">
                           {fmtInt(goal.targetQty)}
-                          <span className="ml-1 text-[11px] text-text-faint">{goal.unit}</span>
+                          <span className="ml-1 text-[12px] text-text-faint">{goal.unit}</span>
                         </td>
                         <td className="px-2.5 py-2 text-right">
                           <span
@@ -271,7 +289,7 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
                           >
                             {fmtInt(left)}
                           </span>
-                          <div className="text-[11px] text-text-faint">
+                          <div className="text-[12px] text-text-faint">
                             {left > 0 ? 'not covered' : left < 0 ? 'over-produced' : 'fully covered'}
                           </div>
                         </td>
@@ -303,24 +321,38 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
                 Confirm JobSheet
               </h3>
 
+              {/*
+                Deliberately not a dashed dropzone: this is the highest-leverage
+                action in the product, so it is a lit surface with a slow shimmer
+                and an ambient glow that intensifies on hover.
+              */}
               <button
                 onClick={() => mes.aiPlanJobSheet(sheet.id)}
                 disabled={locked}
                 title="Auto-plan every work order, BOM, route and machine slot"
                 className={cx(
-                  'group mt-2 flex w-full flex-col items-center gap-1.5 rounded-[6px] border border-dashed px-3 py-4 transition-colors duration-150',
+                  'group relative mt-2 flex w-full flex-col items-center gap-1.5 overflow-hidden',
+                  'rounded-[6px] border px-3 py-4 transition-all duration-300 ease-spring',
                   locked
                     ? 'pointer-events-none border-line text-text-faint opacity-50'
-                    : 'border-accent/50 bg-panel hover:border-accent hover:bg-accent-soft',
+                    : 'glow-accent border-accent/30 bg-accent-soft hover:glow-accent-strong hover:border-accent/60',
                 )}
               >
+                {!locked && (
+                  <span
+                    className="animate-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent dark:via-white/10"
+                    aria-hidden
+                  />
+                )}
                 <LightbulbFilamentIcon
                   size={30}
                   weight="fill"
-                  className="text-accent transition-transform duration-150 group-hover:scale-110"
+                  className="relative text-accent transition-transform duration-300 ease-spring group-hover:scale-115"
                 />
-                <span className="text-[12px] font-medium text-accent">Auto-plan with AI</span>
-                <span className="text-center text-[11px] leading-snug text-text-dim">
+                <span className="relative text-[12px] font-medium text-accent">
+                  Auto-plan with AI
+                </span>
+                <span className="relative text-center text-[12px] leading-snug text-text-dim">
                   Work orders, BOM, route and machine slots for the whole sheet.
                 </span>
               </button>
@@ -334,7 +366,7 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
               >
                 Confirm job sheet
               </Button>
-              <p className="mt-1.5 text-[11px] leading-snug text-text-faint">
+              <p className="mt-1.5 text-[12px] leading-snug text-text-faint">
                 Confirming moves the sheet to pending and confirms every work order on it.
               </p>
             </div>
@@ -350,7 +382,7 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
             </div>
 
             {locked && (
-              <p className="flex items-start gap-2 rounded-[6px] border border-st-confirmed/35 bg-st-confirmed/10 px-2.5 py-2 text-[11px] leading-snug text-st-confirmed">
+              <p className="flex items-start gap-2 rounded-[6px] border border-st-confirmed/35 bg-st-confirmed/10 px-2.5 py-2 text-[12px] leading-snug text-st-confirmed">
                 <LockSimpleIcon size={14} weight="fill" className="mt-px shrink-0" />
                 Confirmed and locked. Neither the sheet nor its work orders can be edited.
               </p>
@@ -359,17 +391,16 @@ function SheetTab({ sheetId, onAddWorkOrder }: { sheetId: string; onAddWorkOrder
         </div>
       </div>
 
-      {/* ---------------------------------------------------------- footer --- */}
-      <footer className="flex shrink-0 justify-center border-t border-line bg-panel-2/40 px-4 py-3">
-        <Button
-          className="min-w-[200px] justify-center"
-          disabled={locked}
-          onClick={() => mes.saveDraft(sheet.id)}
-          icon={<FloppyDiskIcon size={15} weight="bold" />}
-        >
-          Save
-        </Button>
-      </footer>
+      {/*
+        No save step: every edit is written as it is made. The footer reports that
+        rather than offering a button. A locked sheet says so in the panel above,
+        so there is nothing left to report here.
+      */}
+      {!locked && (
+        <footer className="flex shrink-0 justify-center border-t border-line bg-panel-2/40 px-4 py-3">
+          <SavedIndicator at={sheet.lastModifiedAt} />
+        </footer>
+      )}
     </>
   )
 }
