@@ -94,6 +94,10 @@ export interface WorkOrder {
   unit: string
   mode: BuildMode
   status: WorkOrderStatus
+  /** Selected BOM_LIBRARY id. The machine slot stays locked until both are set. */
+  bomTemplateId: string | null
+  /** Selected ROUTE_LIBRARY id. */
+  routeTemplateId: string | null
   bom: BomLine[]
   route: RouteStep[]
   slot: MachineSlot | null
@@ -122,6 +126,8 @@ export interface JobSheet {
   customer: string
   createdBy: string
   createdAt: string
+  /** Last write of any kind: sheet fields, its work orders, or a status move. */
+  lastModifiedAt: string
   dueDate: string
   status: JobSheetStatus
   goals: JobSheetGoal[]

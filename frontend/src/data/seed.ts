@@ -47,6 +47,140 @@ export const MATERIAL_MASTER = [
   { code: 'CS-WIRE-G3Si', name: 'MIG wire G3Si1, 1.0mm', unit: 'kg', onHandQty: 188, unitCost: 18.7 },
 ] as const
 
+/**
+ * BOM and route libraries. The work order tab picks one of each from a dropdown
+ * rather than typing lines by hand; the AI path picks them by product family.
+ * `family` is the middle token of a product code: FG-BRKT-220 -> BRKT.
+ */
+export const BOM_LIBRARY = [
+  {
+    id: 'bom-brkt',
+    code: 'BOM-BRKT-220',
+    name: 'Mounting bracket, anthracite (rev C)',
+    family: 'BRKT',
+    lines: [
+      ['RM-MS-CR2', 0.42],
+      ['CN-M8x25', 4],
+      ['CS-PWD-RAL7016', 0.018],
+    ],
+  },
+  {
+    id: 'bom-pin',
+    code: 'BOM-PIN-SS12',
+    name: 'Stainless locating pin, 12mm',
+    family: 'PIN',
+    lines: [
+      ['RM-SS304-12', 0.21],
+      ['CN-WSH-M8', 2],
+    ],
+  },
+  {
+    id: 'bom-shaft',
+    code: 'BOM-SHAFT-N4',
+    name: 'Pump shaft, 304 stainless',
+    family: 'SHAFT',
+    lines: [
+      ['RM-SS304-12', 0.34],
+      ['CP-SEAL-N70', 1],
+    ],
+  },
+  {
+    id: 'bom-hous',
+    code: 'BOM-HOUS-N4',
+    name: 'Pump housing, 6061',
+    family: 'HOUS',
+    lines: [
+      ['RM-AL6061-40', 0.87],
+      ['CN-M8x25', 6],
+    ],
+  },
+  {
+    id: 'bom-subf',
+    code: 'BOM-SUBF-77',
+    name: 'Welded subframe, 950 series',
+    family: 'SUBF',
+    lines: [
+      ['RM-MS-CR2', 0.66],
+      ['CS-WIRE-G3Si', 0.04],
+    ],
+  },
+  {
+    id: 'bom-hub',
+    code: 'BOM-HUB-A19',
+    name: 'Idler hub assembly',
+    family: 'HUB',
+    lines: [
+      ['RM-AL6061-40', 0.31],
+      ['CP-BRG-6204', 2],
+      ['CN-WSH-M8', 4],
+    ],
+  },
+] as const
+
+export const ROUTE_LIBRARY = [
+  {
+    id: 'rt-brkt',
+    code: 'RT-BRKT-STAMP',
+    name: 'Blank and pierce, then powder coat',
+    family: 'BRKT',
+    steps: [
+      ['Blank and pierce', 'Stamping', 'PRESS-02 / Aida 200T', 45, 6],
+      ['Powder coat', 'Finishing', 'PAINT-03 / Powder Line B', 60, 14],
+    ],
+  },
+  {
+    id: 'rt-pin',
+    code: 'RT-PIN-TURN',
+    name: 'Cut to length, deburr and inspect',
+    family: 'PIN',
+    steps: [
+      ['Cut to length', 'Machining', 'CNC-07 / Doosan Puma 2600', 40, 22],
+      ['Deburr and inspect', 'Inspection', 'ASSY-02 / Bench Cell 2', 15, 18],
+    ],
+  },
+  {
+    id: 'rt-shaft',
+    code: 'RT-SHAFT-TURN',
+    name: 'Turn shaft, seal fit and test',
+    family: 'SHAFT',
+    steps: [
+      ['Turn shaft', 'Machining', 'CNC-04 / Okuma LB3000', 80, 118],
+      ['Seal fit and test', 'Assembly', 'ASSY-02 / Bench Cell 2', 25, 42],
+    ],
+  },
+  {
+    id: 'rt-hous',
+    code: 'RT-HOUS-MILL',
+    name: 'Mill housing, final assembly',
+    family: 'HOUS',
+    steps: [
+      ['Mill housing', 'Machining', 'CNC-07 / Doosan Puma 2600', 95, 204],
+      ['Final assembly', 'Assembly', 'ASSY-02 / Bench Cell 2', 30, 88],
+    ],
+  },
+  {
+    id: 'rt-subf',
+    code: 'RT-SUBF-WELD',
+    name: 'Blank, then MIG weld subframe',
+    family: 'SUBF',
+    steps: [
+      ['Blank', 'Stamping', 'PRESS-05 / Komatsu 110T', 30, 9],
+      ['MIG weld subframe', 'Welding', 'WELD-01 / Fronius TPS 400i', 55, 168],
+    ],
+  },
+  {
+    id: 'rt-hub',
+    code: 'RT-HUB-ASSY',
+    name: 'Machine hub, press bearings, inspect',
+    family: 'HUB',
+    steps: [
+      ['Machine hub bore', 'Machining', 'CNC-04 / Okuma LB3000', 70, 96],
+      ['Press bearings', 'Assembly', 'ASSY-02 / Bench Cell 2', 20, 54],
+      ['Runout inspection', 'Inspection', 'ASSY-02 / Bench Cell 2', 10, 22],
+    ],
+  },
+] as const
+
 const workOrders: WorkOrder[] = [
   // ---- JS-2608-0141 (draft, manual path, one WO already confirmed) -------------
   {
@@ -58,6 +192,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'manual',
     status: 'confirmed',
+    bomTemplateId: 'bom-brkt',
+    routeTemplateId: 'rt-brkt',
     feasibility: 'ok',
     bom: [
       { id: 'b-1', materialCode: 'RM-MS-CR2', name: 'Cold rolled mild steel coil, 2.0mm', requiredPerUnit: 0.42, requiredQty: 756, unit: 'kg', onHandQty: 4270, unitCost: 5.82 },
@@ -93,6 +229,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'manual',
     status: 'draft',
+    bomTemplateId: 'bom-hub',
+    routeTemplateId: 'rt-hub',
     feasibility: 'shortage',
     bom: [
       { id: 'b-4', materialCode: 'RM-AL6061-40', name: 'Aluminium 6061 plate, 40mm', requiredPerUnit: 1.15, requiredQty: 736, unit: 'kg', onHandQty: 612, unitCost: 23.15 },
@@ -125,6 +263,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'ai',
     status: 'draft',
+    bomTemplateId: 'bom-pin',
+    routeTemplateId: 'rt-pin',
     feasibility: 'ok',
     bom: [
       { id: 'b-7', materialCode: 'RM-SS304-12', name: 'Stainless 304 bar, 12mm', requiredPerUnit: 0.21, requiredQty: 504, unit: 'm', onHandQty: 1840, unitCost: 14.6, aiAssigned: true },
@@ -160,6 +300,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'ai',
     status: 'confirmed',
+    bomTemplateId: 'bom-subf',
+    routeTemplateId: 'rt-subf',
     feasibility: 'ok',
     bom: [
       { id: 'b-9', materialCode: 'RM-MS-CR2', name: 'Cold rolled mild steel coil, 2.0mm', requiredPerUnit: 0.66, requiredQty: 627, unit: 'kg', onHandQty: 4270, unitCost: 5.82, aiAssigned: true },
@@ -195,6 +337,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'manual',
     status: 'running',
+    bomTemplateId: 'bom-shaft',
+    routeTemplateId: 'rt-shaft',
     feasibility: 'ok',
     bom: [
       { id: 'b-11', materialCode: 'RM-SS304-12', name: 'Stainless 304 bar, 12mm', requiredPerUnit: 0.34, requiredQty: 425, unit: 'm', onHandQty: 1840, unitCost: 14.6 },
@@ -228,6 +372,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'ai',
     status: 'stopped',
+    bomTemplateId: 'bom-hous',
+    routeTemplateId: 'rt-hous',
     feasibility: 'ok',
     bom: [
       { id: 'b-13', materialCode: 'RM-AL6061-40', name: 'Aluminium 6061 plate, 40mm', requiredPerUnit: 0.87, requiredQty: 417.6, unit: 'kg', onHandQty: 612, unitCost: 23.15, aiAssigned: true },
@@ -261,6 +407,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'manual',
     status: 'completed',
+    bomTemplateId: 'bom-hous',
+    routeTemplateId: 'rt-hous',
     feasibility: 'ok',
     bom: [
       { id: 'b-15', materialCode: 'RM-MS-CR2', name: 'Cold rolled mild steel coil, 2.0mm', requiredPerUnit: 0.51, requiredQty: 153, unit: 'kg', onHandQty: 4270, unitCost: 5.82 },
@@ -294,6 +442,8 @@ const workOrders: WorkOrder[] = [
     unit: 'pcs',
     mode: 'manual',
     status: 'draft',
+    bomTemplateId: null,
+    routeTemplateId: null,
     feasibility: 'unchecked',
     bom: [],
     route: [],
@@ -315,6 +465,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Kenyalang Autoparts Sdn Bhd',
     createdBy: 'Amirah Kamal',
     createdAt: '2026-08-21T09:02:00',
+    lastModifiedAt: '2026-08-25T16:41:00',
     dueDate: '2026-09-08',
     status: 'draft',
     goals: [
@@ -333,6 +484,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Internal stock build',
     createdBy: 'Amirah Kamal',
     createdAt: '2026-08-24T08:30:00',
+    lastModifiedAt: '2026-08-26T09:12:00',
     dueDate: '2026-09-19',
     status: 'draft',
     goals: [
@@ -350,6 +502,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Nordvale Marine Systems',
     createdBy: 'System',
     createdAt: '2026-08-24T10:10:00',
+    lastModifiedAt: '2026-08-24T15:04:00',
     dueDate: '2026-09-02',
     status: 'draft',
     goals: [
@@ -368,6 +521,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Selayang Hydraulics Sdn Bhd',
     createdBy: 'Amirah Kamal',
     createdAt: '2026-08-19T13:40:00',
+    lastModifiedAt: '2026-08-23T11:26:00',
     dueDate: '2026-09-04',
     status: 'pending_approval',
     goals: [
@@ -385,6 +539,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Nordvale Marine Systems',
     createdBy: 'Ridzuan Hashim',
     createdAt: '2026-08-17T09:55:00',
+    lastModifiedAt: '2026-08-26T07:38:00',
     dueDate: '2026-08-30',
     status: 'in_progress',
     goals: [
@@ -403,6 +558,7 @@ const jobSheets: JobSheet[] = [
     customer: 'Pacific Rim Fasteners',
     createdBy: 'Ridzuan Hashim',
     createdAt: '2026-08-11T11:20:00',
+    lastModifiedAt: '2026-08-22T17:10:00',
     dueDate: '2026-08-22',
     status: 'completed',
     goals: [

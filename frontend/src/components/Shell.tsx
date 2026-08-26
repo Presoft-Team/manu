@@ -11,8 +11,8 @@ import { useMes } from '@/store/mes'
 import { Button, cx } from '@/components/ui'
 
 const NAV = [
-  { to: '/', label: 'Drafts', end: true },
-  { to: '/confirmed', label: 'Confirmed' },
+  { to: '/', label: 'Job sheets', end: true },
+  { to: '/confirmed', label: 'Approvals' },
   { to: '/wip', label: 'Work in progress' },
 ]
 
@@ -74,7 +74,7 @@ export function Shell() {
         <div className="mx-auto flex h-14 max-w-[1500px] items-center gap-6 px-4">
           <div className="flex items-center gap-2">
             <GearSixIcon size={18} weight="fill" className="text-accent" />
-            <span className="text-[14px] font-semibold tracking-tight">Job Control</span>
+            <span className="text-[14px] font-semibold tracking-tight">PrePPSE</span>
           </div>
 
           <nav className="flex items-center gap-1">

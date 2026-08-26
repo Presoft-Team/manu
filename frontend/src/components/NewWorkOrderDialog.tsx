@@ -48,7 +48,7 @@ export function NewWorkOrderDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-[12vh]"
+      className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 px-4 py-[12vh]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
