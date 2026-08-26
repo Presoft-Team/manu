@@ -40,6 +40,9 @@ docker-compose.override.yml
 # ---- Editors and OS ---------------------------------------------------------
 .vscode/*
 !.vscode/extensions.json
+# Shared: pins the editor to the project's TypeScript so everyone sees the same
+# errors as the CLI.
+!.vscode/settings.json
 .idea/
 *.swp
 .DS_Store

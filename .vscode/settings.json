@@ -1,0 +1,7 @@
+{
+  // Use the project's TypeScript (frontend/package.json), not the one bundled
+  // with VS Code. Older compilers mis-resolve packages whose exports map lists
+  // "import" before "types", such as @phosphor-icons/react, and report ts(7016).
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}
