@@ -1,0 +1,22 @@
+# Keep the build context small. Anything here is invisible to the Dockerfile.
+.git
+.gitignore
+.agents
+.claude
+.vscode
+node_modules
+**/node_modules
+**/dist
+**/.vite
+**/__pycache__
+**/*.pyc
+.venv
+**/.venv
+.env
+**/.env
+!**/.env.example
+pgdata
+*.md
+docker-compose*.yml
+**/*.tsbuildinfo
+npm-debug.log*

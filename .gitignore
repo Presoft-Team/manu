@@ -35,7 +35,13 @@ env/
 # Postgres lives in the named `pgdata` volume, but catch bind-mounted copies too.
 pgdata/
 *.sqlite3
+# Local-only compose tweaks: ports, mounts, an override of the seeded data.
 docker-compose.override.yml
+# .dockerignore and Dockerfile are committed on purpose; both are part of the build.
+
+# ---- Deploy tooling ---------------------------------------------------------
+# Left behind by the Vercel CLI. The project is hosted with Docker instead.
+.vercel/
 
 # ---- Editors and OS ---------------------------------------------------------
 .vscode/*
